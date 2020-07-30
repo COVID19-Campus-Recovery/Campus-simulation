@@ -1,0 +1,1021 @@
+#### Splits Affiliation Matrix into AffiliationMatrix_perday 
+#### Creates Affiliation Matrices for different housing strategies
+
+
+# hybrid touchpoint 
+#For MW class (same for TR): Assume 1 touchpoint per week that alternates between groups
+#For MWF class: Assume 1 touchpoint per week that alternates between groups
+
+#hybrid split
+#MW and TR classes split 50% attendance
+#MWF classes split into 33% attendance. Every student attends 1 class per week
+
+# The first 4 columns  ['Week1','Week2','Week3','Week4'] will bring the row (student) count of classes in each week
+# The course_columns will be filled with integers from 0 to 5, with the following meanings:
+
+# 1: student does not attend the course that particular weekday, e.g. M (although he may still be enrolled in the course and come to campus on another weekday to take it)
+# 11: student goes to campus that particular weekday only on Week 1
+# 12: student goes to campus that particular weekday only on Week 2
+# 13: student goes to campus that particular weekday only on Week 3
+# 14: student goes to campus that particular weekday only on Week 4
+# 4: student goes to campus that particular weekday on all weeks 
+    
+# week 5 works the same as week 1
+# week 6 works the same as week 2
+# and so on...    
+    
+# all possible course schedules /weekdays
+#["F"    "M"    "MF"   "MTWR" "MW"   "MWF"  "MWRF" "R"    "S"    "T"    "TR"   "W"    "WF"]
+
+
+
+import pandas as pd
+import numpy as np
+import os
+pd.set_option('mode.chained_assignment', None)
+
+
+# load AffiliationMatrix
+AffiliationMatrix = pd.read_csv('AffiliationMatrix_v5_from_scratch_B.csv')
+ncourses=AffiliationMatrix.shape[1]-1
+
+#adding dots to separate ids in header
+AffiliationMatrix=AffiliationMatrix.rename(columns=dict(zip(AffiliationMatrix.columns,AffiliationMatrix.columns.str.replace(' ','.'))))
+#remove rows with all zeros (student not enrolled in any classes left)
+AffiliationMatrix.drop(AffiliationMatrix[AffiliationMatrix.iloc[:,1:].sum(axis = 1)==0].index, inplace=True)
+#AffiliationMatrix.to_csv('AffiliationMatrix_v5_housing1.csv',index=False)
+
+#loading classes
+CourseSchedules = pd.read_excel('Fall 2019 Combined Sections Shown with group number for each set and CRN.xlsx',sheet_name = 'Sheet')
+# creating CourseID column 
+CourseSchedules = CourseSchedules.apply(lambda x: x.str.strip() if x.dtype == "object" else x)
+CourseSchedules.columns = CourseSchedules.columns.str.strip()
+CourseSchedules.columns
+CourseSchedules.info()
+# if credit hours comes into float format and you wish to remove .0 from the end
+CourseSchedules['Credit Hours'] = CourseSchedules['Credit Hours'].astype(str)
+CourseSchedules['Credit Hours'] = CourseSchedules.apply(lambda x: x['Credit Hours'].split(".",1)[0], axis=1)
+
+id_cols = ['Subject Code','Course Number','Course Section','CRN','Credit Hours']
+CourseSchedules.insert(0,'CourseID','')
+CourseSchedules['CourseID'] = CourseSchedules[id_cols].apply(lambda row: '.'.join(row.values.astype(str)), axis=1)
+len(CourseSchedules['CourseID'].unique()) #3352 unique values out of 4111
+
+#not all courses from CourseSchedules are in AffiliationMatrix
+#so we only consider courses from CourseSchedules which are in AffiliationMatrix 
+len(set(AffiliationMatrix.columns.values.tolist()[1:])) #get number of unique
+Courses_inAffiliation = CourseSchedules[CourseSchedules['CourseID'].isin(AffiliationMatrix.columns)==True]
+
+### drop by course size
+# the AffiliationMatrix will drop these courses
+course_85 = Courses_inAffiliation[Courses_inAffiliation['Enrollment']>85]['CourseID']
+AffiliationMatrix.drop( course_85,axis=1, inplace = True)
+
+#remove rows with all zeros (student not enrolled in any classes left)
+AffiliationMatrix.drop(AffiliationMatrix[AffiliationMatrix.iloc[:,1:].sum(axis = 1)==0].index, inplace=True)
+#AffiliationMatrix.to_csv('AffiliationMatrix_v5_housing2.csv',index=False)
+
+#create one AffiliationMatrix for each weekday
+courses_M =  Courses_inAffiliation[Courses_inAffiliation['Days'].str.contains('M')==True]['CourseID']
+AffiliationMatrix_M = AffiliationMatrix.loc[:,np.concatenate((np.array([True], dtype=bool), AffiliationMatrix.columns.isin(courses_M)[1:]==True))]
+AffiliationMatrix_M.drop(AffiliationMatrix_M[AffiliationMatrix_M.iloc[:,1:].sum(axis = 1)==0].index, inplace=True)
+courses_T = Courses_inAffiliation[Courses_inAffiliation['Days'].str.contains('T')==True]['CourseID']
+AffiliationMatrix_T = AffiliationMatrix.loc[:,np.concatenate((np.array([True], dtype=bool), AffiliationMatrix.columns.isin(courses_T)[1:]==True))]
+AffiliationMatrix_T.drop(AffiliationMatrix_T[AffiliationMatrix_T.iloc[:,1:].sum(axis = 1)==0].index, inplace=True)
+courses_W = Courses_inAffiliation[Courses_inAffiliation['Days'].str.contains('W')==True]['CourseID']
+AffiliationMatrix_W = AffiliationMatrix.loc[:,np.concatenate((np.array([True], dtype=bool), AffiliationMatrix.columns.isin(courses_W)[1:]==True))]
+AffiliationMatrix_W.drop(AffiliationMatrix_W[AffiliationMatrix_W.iloc[:,1:].sum(axis = 1)==0].index, inplace=True)
+courses_R = Courses_inAffiliation[Courses_inAffiliation['Days'].str.contains('R')==True]['CourseID']
+AffiliationMatrix_R = AffiliationMatrix.loc[:,np.concatenate((np.array([True], dtype=bool), AffiliationMatrix.columns.isin(courses_R)[1:]==True))]
+AffiliationMatrix_R.drop(AffiliationMatrix_R[AffiliationMatrix_R.iloc[:,1:].sum(axis = 1)==0].index, inplace=True)
+courses_F = Courses_inAffiliation[Courses_inAffiliation['Days'].str.contains('F')==True]['CourseID']
+AffiliationMatrix_F = AffiliationMatrix.loc[:,np.concatenate((np.array([True], dtype=bool), AffiliationMatrix.columns.isin(courses_F)[1:]==True))]
+AffiliationMatrix_F.drop(AffiliationMatrix_F[AffiliationMatrix_F.iloc[:,1:].sum(axis = 1)==0].index, inplace=True)
+courses_S = Courses_inAffiliation[Courses_inAffiliation['Days'].str.contains('S')==True]['CourseID']
+AffiliationMatrix_S = AffiliationMatrix.loc[:,np.concatenate((np.array([True], dtype=bool), AffiliationMatrix.columns.isin(courses_S)[1:]==True))]
+AffiliationMatrix_S.drop(AffiliationMatrix_S[AffiliationMatrix_S.iloc[:,1:].sum(axis = 1)==0].index, inplace=True)
+
+# adding columns Week1 Week2 Week3 Week4 to each _perday database
+
+for new_column in ['Week4','Week3','Week2','Week1']:
+    AffiliationMatrix_M.insert(0,new_column,0)
+    AffiliationMatrix_T.insert(0,new_column,0)
+    AffiliationMatrix_W.insert(0,new_column,0)
+    AffiliationMatrix_R.insert(0,new_column,0)
+    AffiliationMatrix_F.insert(0,new_column,0)
+    AffiliationMatrix_S.insert(0,new_column,0)
+    
+
+weeks= ['Week1','Week2','Week3','Week4']
+
+
+# Strategy 1
+#	Class sections over 85 moved online 
+#	Class sections 50-85 are hybrid touchpoint
+#	Class sections 20-50 are hybrid split
+#	Class sections 0-20 are residential
+
+
+#residential courses for strategies 1 and 2
+courses_020 = Courses_inAffiliation[Courses_inAffiliation['Enrollment']<=20]['CourseID'].tolist()
+
+#hybrid split courses for strategy 1
+courses_2050_M = Courses_inAffiliation[(Courses_inAffiliation['Days'] == 'M') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=50)]['CourseID'].tolist()
+courses_2050_T = Courses_inAffiliation[(Courses_inAffiliation['Days'] == 'T') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=50)]['CourseID'].tolist()
+courses_2050_W = Courses_inAffiliation[(Courses_inAffiliation['Days'] == 'W') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=50)]['CourseID'].tolist()
+courses_2050_R = Courses_inAffiliation[(Courses_inAffiliation['Days'] == 'R') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=50)]['CourseID'].tolist()
+courses_2050_F = Courses_inAffiliation[(Courses_inAffiliation['Days'] == 'F') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=50)]['CourseID'].tolist()
+courses_2050_S = Courses_inAffiliation[(Courses_inAffiliation['Days'] == 'S') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=50)]['CourseID'].tolist()
+courses_2050_MW = Courses_inAffiliation[(Courses_inAffiliation['Days'] == 'MW') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=50)]['CourseID'].tolist()
+courses_2050_TR = Courses_inAffiliation[(Courses_inAffiliation['Days'] == 'TR') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=50)]['CourseID'].tolist()
+courses_2050_MF = Courses_inAffiliation[(Courses_inAffiliation['Days'] == 'MF') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=50)]['CourseID'].tolist()
+courses_2050_WF = Courses_inAffiliation[(Courses_inAffiliation['Days'] == 'WF') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=50)]['CourseID'].tolist()
+courses_2050_MWF = Courses_inAffiliation[(Courses_inAffiliation['Days'] == 'MWF') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=50)]['CourseID'].tolist()
+courses_2050_MTWR = Courses_inAffiliation[(Courses_inAffiliation['Days'] == 'MTWR') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=50)]['CourseID'].tolist()
+courses_2050_MWRF = Courses_inAffiliation[(Courses_inAffiliation['Days'] == 'MWRF') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=50)]['CourseID'].tolist()
+
+#hybrid touchpoint courses for strategy 1
+courses_5085_M = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'M') & (Courses_inAffiliation['Enrollment']>50) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_5085_T = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'T') & (Courses_inAffiliation['Enrollment']>50) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_5085_W = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'W') & (Courses_inAffiliation['Enrollment']>50) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_5085_R = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'R') & (Courses_inAffiliation['Enrollment']>50) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_5085_F = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'F') & (Courses_inAffiliation['Enrollment']>50) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_5085_S = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'S') & (Courses_inAffiliation['Enrollment']>50) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_5085_MW = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'MW') & (Courses_inAffiliation['Enrollment']>50) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_5085_TR = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'TR') & (Courses_inAffiliation['Enrollment']>50) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_5085_MF = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'MF') & (Courses_inAffiliation['Enrollment']>50) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_5085_WF = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'WF') & (Courses_inAffiliation['Enrollment']>50) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_5085_MWF = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'MWF') & (Courses_inAffiliation['Enrollment']>50) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_5085_MTWR = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'MTWR') & (Courses_inAffiliation['Enrollment']>50) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_5085_MWRF = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'MWRF') & (Courses_inAffiliation['Enrollment']>50) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+
+
+#housing strategy 3 affiliation matrix: Affiliation matrix without courses over 85 and without students with only online and hybrid touch point courses
+hybrid_touchpoint_5085 = Courses_inAffiliation[ (Courses_inAffiliation['Enrollment']>50) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+hybrid_touchpoint_2085 = Courses_inAffiliation[ (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+# check students who are only taking hybrid_touchpoint courses in strategy 1
+df = AffiliationMatrix
+df2 = AffiliationMatrix
+hybrid_touchpoint_students_strategy1=[]
+hybrid_touchpoint_students_strategy2=[]
+for student in df['SYSGENID']:
+    pos = df.loc[df['SYSGENID'] == student,:].index[0]
+    classes = df.columns[(df.loc[df['SYSGENID'] == student].values==1)[0]].tolist()
+    if all(x in hybrid_touchpoint_5085 for x in classes):
+        hybrid_touchpoint_students_strategy1.append(student)
+    if all(x in hybrid_touchpoint_2085 for x in classes):
+        hybrid_touchpoint_students_strategy2.append(student)
+    
+    
+# dropping students only taking hybrid touch point courses (rows)
+df= df.loc[df.SYSGENID.isin(hybrid_touchpoint_students_strategy1)==False,:]
+# dropping columns with all zeros (empty courses/ columns)
+df=df.loc[:,np.concatenate((np.array([True], dtype=bool),(df.iloc[:,1:].sum(axis = 0)!=0)))]
+df.to_csv('AffiliationMatrix_v5_housing3_strategy1.csv',index=False)
+
+
+# dropping students only taking hybrid touch point courses (rows)
+df2= df2.loc[df2.SYSGENID.isin(hybrid_touchpoint_students_strategy2)==False,:]
+# dropping columns with all zeros (empty courses/ columns)
+df2=df2.loc[:,np.concatenate((np.array([True], dtype=bool),(df2.iloc[:,1:].sum(axis = 0)!=0)))]
+df2.to_csv('AffiliationMatrix_v5_housing3_strategy2.csv',index=False)
+
+
+# Monday database for Strategy 1
+first=1
+df = AffiliationMatrix_M
+student= 116368896 #test
+#student=115468456
+
+for student in df['SYSGENID']:
+    pos = df.loc[df['SYSGENID'] == student,:].index[0]
+    classes = df.columns[(df.loc[df['SYSGENID'] == student].values==1)[0]].tolist()
+    #residential
+    if any(x in classes for x in courses_020):
+    #if classes in courses_020: 
+        # just fill all  weeks with 1 for these residential classes, and courses with code 5 (student will attend all weeks)
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_020] 
+        df.loc[pos,weeks]+= sum(map(lambda x : x>0, vec)) 
+        idx=[x for x in classes if x in courses_020] 
+        df.loc[pos,idx]= 4 
+        #df[df['SYSGENID'] == student][classes] #check
+    #hybrid split
+    if any(x in classes for x in courses_2050_M): 
+        # creating vector with classes and assigning a number in [0,1] for the position of a student to split classes into groups
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_M] 
+        # next, sum(map()) will count the number of elements in vec satisfying the conditions that will separate them into groups
+        # if a student has 2 classes on the same day and the split number is in the same group interval, the count will be 2
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2050_M])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2050_M])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_2050_M])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_2050_M])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    if any(x in classes for x in courses_2050_MW):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_MW] 
+        df.loc[pos,weeks] += sum(map(lambda x : x<=0.5, vec)) #Group 1 [0.00-0.5] meets on Monday
+        idx=np.array([x for x in classes if x in courses_2050_MW])[np.array(vec)<=0.5].tolist()
+        df.loc[pos,idx]= 4 
+    if any(x in classes for x in courses_2050_MF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_MF] 
+        df.loc[pos,weeks] += sum(map(lambda x : x<=0.5, vec)) #Group 1 [0.00-0.5] meets on Monday 
+        idx=np.array([x for x in classes if x in courses_2050_MF])[np.array(vec)<=0.5].tolist()
+        df.loc[pos,idx]= 4 
+    if any(x in classes for x in courses_2050_MWF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_MWF] 
+        df.loc[pos,weeks] += sum(map(lambda x : x<=0.33, vec)) #Group 1 [0.00-0.33] meets on Monday 
+        idx=np.array([x for x in classes if x in courses_2050_MWF])[np.array(vec)<=0.33].tolist()
+        df.loc[pos,idx]= 4 
+    if any(x in classes for x in courses_2050_MTWR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_MTWR] 
+        df.loc[pos,weeks] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Monday 
+        idx=np.array([x for x in classes if x in courses_2050_MTWR])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 4 
+    if any(x in classes for x in courses_2050_MWRF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_MWRF] 
+        df.loc[pos,weeks] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Monday  
+        idx=np.array([x for x in classes if x in courses_2050_MWRF])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 4 
+    #hybrid touchpoint   
+    if any(x in classes for x in courses_5085_M): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_M] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_5085_M])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_5085_M])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_5085_M])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_5085_M])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    if any(x in classes for x in courses_5085_MW):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_MW] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_5085_MW])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.50-0.75] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_5085_MW])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 12 
+    if any(x in classes for x in courses_5085_MF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_MF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_5085_MF])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.50-0.75] meets on Week 2    
+        idx=np.array([x for x in classes if x in courses_5085_MF])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 12 
+    if any(x in classes for x in courses_5085_MWF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_MWF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.33, vec)) #Group 1 [0.00-0.33] meets on Monday Week 1
+        idx=np.array([x for x in classes if x in courses_5085_MWF])[np.array(vec)<=0.33].tolist()
+        df.loc[pos,idx]= 11 
+    if any(x in classes for x in courses_5085_MTWR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_MTWR] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Monday Week 1
+        idx=np.array([x for x in classes if x in courses_5085_MTWR])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+    if any(x in classes for x in courses_5085_MWRF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_MWRF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Monday Week 1 
+        idx=np.array([x for x in classes if x in courses_5085_MWRF])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+       
+        
+
+#save .csv
+df.to_csv('AffiliationMatrix_v5_strategy1_M.csv',index=False)
+
+
+# Tuesday database for Strategy 1
+first=1
+df = AffiliationMatrix_T
+for student in df['SYSGENID']:
+    pos = df.loc[df['SYSGENID'] == student,:].index[0]
+    classes = df.columns[(df.loc[df['SYSGENID'] == student].values==1)[0]].tolist()
+    #residential
+    if any(x in classes for x in courses_020):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_020] 
+        df.loc[pos,weeks]+= sum(map(lambda x : x>0, vec)) 
+        idx=[x for x in classes if x in courses_020] 
+        df.loc[pos,idx]= 4 
+    #hybrid split
+    if any(x in classes for x in courses_2050_T): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_T] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2050_T])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2050_T])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_2050_T])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_2050_T])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    if any(x in classes for x in courses_2050_TR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_TR] 
+        df.loc[pos,weeks] += sum(map(lambda x : x<=0.5, vec)) #Group 1 [0.00-0.5] meets on Tuesday
+        idx=np.array([x for x in classes if x in courses_2050_TR])[np.array(vec)<=0.5].tolist()
+        df.loc[pos,idx]= 4
+    if any(x in classes for x in courses_2050_MTWR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_MTWR] 
+        df.loc[pos,weeks] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Tuesday 
+        idx=np.array([x for x in classes if x in courses_2050_MTWR])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 4 
+    #hybrid touchpoint 
+    if any(x in classes for x in courses_5085_T): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_T] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_5085_T])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_5085_T])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_5085_T])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_5085_T])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    if any(x in classes for x in courses_5085_TR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_TR] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_5085_TR])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.50-0.75] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_5085_TR])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 12 
+    if any(x in classes for x in courses_5085_MTWR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_MTWR] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Tuesday Week 1
+        idx=np.array([x for x in classes if x in courses_5085_MTWR])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 11 
+
+df.to_csv('AffiliationMatrix_v5_strategy1_T.csv',index=False)
+    
+    
+# Wednesday database for Strategy 1
+first=1
+df = AffiliationMatrix_W
+for student in df['SYSGENID']:
+    pos = df.loc[df['SYSGENID'] == student,:].index[0]
+    classes = df.columns[(df.loc[df['SYSGENID'] == student].values==1)[0]].tolist()
+    #residential
+    if any(x in classes for x in courses_020):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_020] 
+        df.loc[pos,weeks]+= sum(map(lambda x : x>0, vec)) 
+        idx=[x for x in classes if x in courses_020] 
+        df.loc[pos,idx]= 4 
+    #hybrid split
+    if any(x in classes for x in courses_2050_W): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_W] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2050_W])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2050_W])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_2050_W])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_2050_W])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    if any(x in classes for x in courses_2050_MW):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_MW] 
+        df.loc[pos,weeks] += sum(map(lambda x : x>0.5, vec)) #Group 2 [0.50-1.00] meets on Wednesday
+        idx=np.array([x for x in classes if x in courses_2050_MW])[np.array(vec)>0.5].tolist()
+        df.loc[pos,idx]= 4 
+    if any(x in classes for x in courses_2050_WF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_WF] 
+        df.loc[pos,weeks] += sum(map(lambda x : x<=0.5, vec)) #Group 1 [0.00-0.5] meets on Wednesday
+        idx=np.array([x for x in classes if x in courses_2050_WF])[np.array(vec)<=0.5].tolist()
+        df.loc[pos,idx]= 4 
+    if any(x in classes for x in courses_2050_MWF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_MWF] 
+        df.loc[pos,weeks] += sum(map(lambda x : 0.33<x<=0.67, vec)) #Group 2 (0.33-0.67] meets on Wednesday
+        idx=np.array([x for x in classes if x in courses_2050_MWF])[np.logical_and(np.array(vec)>0.33, np.array(vec)<=0.67)].tolist()
+        df.loc[pos,idx]= 4 
+    if any(x in classes for x in courses_2050_MTWR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_MTWR] 
+        df.loc[pos,weeks] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Wednesday 
+        idx=np.array([x for x in classes if x in courses_2050_MTWR])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 4 
+    if any(x in classes for x in courses_2050_MWRF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_MWRF] 
+        df.loc[pos,weeks] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Wednesday  
+        idx=np.array([x for x in classes if x in courses_2050_MWRF])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 4 
+    #hybrid touchpoint    
+    if any(x in classes for x in courses_5085_W): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_W] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_5085_W])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_5085_W])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_5085_W])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_5085_W])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    if any(x in classes for x in courses_5085_MW):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_MW] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.50] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_5085_MW])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 [0.75-1.00] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_5085_MW])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 12 
+    if any(x in classes for x in courses_5085_WF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_WF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_5085_WF])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_5085_WF])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 12 
+    if any(x in classes for x in courses_5085_MWF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_MWF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.33<x<=0.67, vec)) #Group 2 (0.33-0.67] meets on Wednesday Week 1
+        idx=np.array([x for x in classes if x in courses_5085_MWF])[np.logical_and(np.array(vec)>0.33, np.array(vec)<=0.67)].tolist()
+        df.loc[pos,idx]= 11
+    if any(x in classes for x in courses_5085_MTWR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_MTWR] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Wednesday Week 1
+        idx=np.array([x for x in classes if x in courses_5085_MTWR])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 11 
+    if any(x in classes for x in courses_5085_MWRF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_MWRF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Wednesday Week 1
+        idx=np.array([x for x in classes if x in courses_5085_MWRF])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 11 
+
+df.to_csv('AffiliationMatrix_v5_strategy1_W.csv',index=False)
+
+
+# Thursday database for Strategy 1
+first=1
+df = AffiliationMatrix_R
+for student in df['SYSGENID']:
+    pos = df.loc[df['SYSGENID'] == student,:].index[0]
+    classes = df.columns[(df.loc[df['SYSGENID'] == student].values==1)[0]].tolist()
+    #residential
+    if any(x in classes for x in courses_020):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_020] 
+        df.loc[pos,weeks]+= sum(map(lambda x : x>0, vec)) 
+        idx=[x for x in classes if x in courses_020] 
+        df.loc[pos,idx]= 4  
+    #hybrid split
+    if any(x in classes for x in courses_2050_R): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_R] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2050_R])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2050_R])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_2050_R])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_2050_R])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    if any(x in classes for x in courses_2050_TR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_TR] 
+        df.loc[pos,weeks] += sum(map(lambda x : x>0.5, vec)) #Group 2 [0.50-1.00] meets on Thursday
+        idx=np.array([x for x in classes if x in courses_2050_TR])[np.array(vec)>0.5].tolist()
+        df.loc[pos,idx]= 4
+    if any(x in classes for x in courses_2050_MTWR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_MTWR] 
+        df.loc[pos,weeks] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Thursday
+        idx=np.array([x for x in classes if x in courses_2050_MTWR])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 4
+    if any(x in classes for x in courses_2050_MWRF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_MWRF] 
+        df.loc[pos,weeks] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Thursday
+        idx=np.array([x for x in classes if x in courses_2050_MWRF])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 4
+    #hybrid touchpoint   
+    if any(x in classes for x in courses_5085_R): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_R] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_5085_R])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_5085_R])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_5085_R])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_5085_R])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    if any(x in classes for x in courses_5085_TR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_TR] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.50] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_5085_TR])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 11
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 [0.75-1.00] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_5085_TR])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 12 
+    if any(x in classes for x in courses_5085_MTWR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_MTWR] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 [0.75-1.00] meets on Thursday Week 1
+        idx=np.array([x for x in classes if x in courses_5085_MTWR])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 11
+    if any(x in classes for x in courses_5085_MWRF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_MWRF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Thursday Week 1
+        idx=np.array([x for x in classes if x in courses_5085_MWRF])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 11
+df.to_csv('AffiliationMatrix_v5_strategy1_R.csv',index=False)
+    
+    
+# Friday database for Strategy 1
+first=1
+df = AffiliationMatrix_F
+for student in df['SYSGENID']:
+    pos = df.loc[df['SYSGENID'] == student,:].index[0]
+    classes = df.columns[(df.loc[df['SYSGENID'] == student].values==1)[0]].tolist()
+    #residential
+    if any(x in classes for x in courses_020):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_020] 
+        df.loc[pos,weeks]+= sum(map(lambda x : x>0, vec)) 
+        idx=[x for x in classes if x in courses_020] 
+        df.loc[pos,idx]= 4 
+    #hybrid split
+    if any(x in classes for x in courses_2050_F): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_F] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2050_F])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2050_F])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_2050_F])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_2050_F])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    if any(x in classes for x in courses_2050_MF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_MF] 
+        df.loc[pos,weeks] += sum(map(lambda x : x>0.5, vec)) #Group 2 (0.5-1] meets on Friday 
+        idx=np.array([x for x in classes if x in courses_2050_MF])[np.array(vec)>0.5].tolist()
+        df.loc[pos,idx]= 4
+    if any(x in classes for x in courses_2050_WF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_WF] 
+        df.loc[pos,weeks] += sum(map(lambda x : x>0.5, vec)) #Group 2 (0.5-1] meets on Friday  
+        idx=np.array([x for x in classes if x in courses_2050_WF])[np.array(vec)>0.5].tolist()
+        df.loc[pos,idx]= 4
+    if any(x in classes for x in courses_2050_MWF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_MWF]  
+        df.loc[pos,weeks] += sum(map(lambda x : 0.67<x<=1, vec)) #Group 3 (0.67-1.00] meets on Friday 
+        idx=np.array([x for x in classes if x in courses_2050_MWF])[np.array(vec)>0.67].tolist()
+        df.loc[pos,idx]= 4
+    if any(x in classes for x in courses_2050_MWRF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_MWRF] 
+        df.loc[pos,weeks] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 [0.75-1] meets on Friday 
+        idx=np.array([x for x in classes if x in courses_2050_MWRF])[np.array(vec)>0.75].tolist()
+        df.loc[pos,idx]= 4
+    #hybrid touchpoint    
+    if any(x in classes for x in courses_5085_F): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_F] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_5085_F])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_5085_F])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_5085_F])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_5085_F])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    if any(x in classes for x in courses_5085_MF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_MF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_5085_MF])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 2 
+        idx=np.array([x for x in classes if x in courses_5085_MF])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 12
+    if any(x in classes for x in courses_5085_WF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_WF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_5085_WF])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 2 
+        idx=np.array([x for x in classes if x in courses_5085_WF])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 12
+    if any(x in classes for x in courses_5085_MWF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_MWF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.67<x<=1, vec)) #Group 3 (0.67-1.00] meets on Friday Week 1
+        idx=np.array([x for x in classes if x in courses_5085_MWF])[np.logical_and(np.array(vec)>0.67, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 11 
+    if any(x in classes for x in courses_5085_MWRF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_MWRF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Friday Week 1 
+        idx=np.array([x for x in classes if x in courses_5085_MWRF])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 11
+       
+df.to_csv('AffiliationMatrix_v5_strategy1_F.csv',index=False)
+
+
+# Saturday database for Strategy 1
+first=1
+df = AffiliationMatrix_S
+for student in df['SYSGENID']:
+    pos = df.loc[df['SYSGENID'] == student,:].index[0]
+    classes = df.columns[(df.loc[df['SYSGENID'] == student].values==1)[0]].tolist()
+    #residential
+    if any(x in classes for x in courses_020):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_020] 
+        df.loc[pos,weeks]+= sum(map(lambda x : x>0, vec)) 
+        idx=[x for x in classes if x in courses_020] 
+        df.loc[pos,idx]= 4 
+    #hybrid split
+    if any(x in classes for x in courses_2050_S): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2050_S] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2050_S])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2050_S])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_2050_S])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_2050_S])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    #hybrid touchpoint    
+    if any(x in classes for x in courses_5085_S): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_5085_S] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_5085_S])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_5085_S])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_5085_S])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_5085_S])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+   
+       
+df.to_csv('AffiliationMatrix_v5_strategy1_S.csv',index=False)
+
+
+
+# Strategy 2
+#	Class sections over 85 moved online 
+#	Class sections 20-85 are hybrid touchpoint
+#	Class sections 0-20 are residential
+
+
+courses_2085_M = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'M') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_2085_T = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'T') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_2085_W = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'W') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_2085_R = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'R') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_2085_F = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'F') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_2085_S = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'S') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_2085_MW = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'MW') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_2085_TR = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'TR') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_2085_MF = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'MF') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_2085_WF = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'WF') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_2085_MWF = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'MWF') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_2085_MTWR = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'MTWR') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+courses_2085_MWRF = Courses_inAffiliation[ (Courses_inAffiliation['Days'] == 'MWRF') & (Courses_inAffiliation['Enrollment']>20) & (Courses_inAffiliation['Enrollment']<=85)]['CourseID'].tolist()
+
+
+
+
+# Monday database for Strategy 2
+first=1
+df = AffiliationMatrix_M
+for student in df['SYSGENID']:
+    pos = df.loc[df['SYSGENID'] == student,:].index[0]
+    classes = df.columns[(df.loc[df['SYSGENID'] == student].values==1)[0]].tolist()
+    #residential
+    if any(x in classes for x in courses_020):
+    #if classes in courses_020: 
+        # just fill all  weeks with 1 for these residential classes, and courses with code 5 (student will attend all weeks)
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_020] 
+        df.loc[pos,weeks]+= sum(map(lambda x : x>0, vec)) 
+        idx=[x for x in classes if x in courses_020] 
+        df.loc[pos,idx]= 4 
+        #df[df['SYSGENID'] == student][classes] #check
+    #hybrid touchpoint   
+    if any(x in classes for x in courses_2085_M): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_M] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2085_M])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2085_M])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_2085_M])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_2085_M])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    if any(x in classes for x in courses_2085_MW):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_MW] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2085_MW])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.50-0.75] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2085_MW])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 12 
+    if any(x in classes for x in courses_2085_MF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_MF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2085_MF])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.50-0.75] meets on Week 2    
+        idx=np.array([x for x in classes if x in courses_2085_MF])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 12 
+    if any(x in classes for x in courses_2085_MWF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_MWF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.33, vec)) #Group 1 [0.00-0.33] meets on Monday Week 1
+        idx=np.array([x for x in classes if x in courses_2085_MWF])[np.array(vec)<=0.33].tolist()
+        df.loc[pos,idx]= 11 
+    if any(x in classes for x in courses_2085_MTWR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_MTWR] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Monday Week 1
+        idx=np.array([x for x in classes if x in courses_2085_MTWR])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+    if any(x in classes for x in courses_2085_MWRF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_MWRF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Monday Week 1 
+        idx=np.array([x for x in classes if x in courses_2085_MWRF])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+       
+        
+
+#save .csv
+df.to_csv('AffiliationMatrix_v5_strategy2_M.csv',index=False)
+
+
+# Tuesday database for Strategy 2
+first=1
+df = AffiliationMatrix_T
+for student in df['SYSGENID']:
+    pos = df.loc[df['SYSGENID'] == student,:].index[0]
+    classes = df.columns[(df.loc[df['SYSGENID'] == student].values==1)[0]].tolist()
+    #residential
+    if any(x in classes for x in courses_020):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_020] 
+        df.loc[pos,weeks]+= sum(map(lambda x : x>0, vec)) 
+        idx=[x for x in classes if x in courses_020] 
+        df.loc[pos,idx]= 4 
+    #hybrid touchpoint 
+    if any(x in classes for x in courses_2085_T): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_T] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2085_T])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2085_T])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_2085_T])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_2085_T])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    if any(x in classes for x in courses_2085_TR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_TR] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2085_TR])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.50-0.75] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2085_TR])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 12 
+    if any(x in classes for x in courses_2085_MTWR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_MTWR] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Tuesday Week 1
+        idx=np.array([x for x in classes if x in courses_2085_MTWR])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 11 
+
+df.to_csv('AffiliationMatrix_v5_strategy2_T.csv',index=False)
+    
+ 
+# Wednesday database for Strategy 2   
+first=1
+df = AffiliationMatrix_W
+for student in df['SYSGENID']:
+    pos = df.loc[df['SYSGENID'] == student,:].index[0]
+    classes = df.columns[(df.loc[df['SYSGENID'] == student].values==1)[0]].tolist()
+    #residential
+    if any(x in classes for x in courses_020):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_020] 
+        df.loc[pos,weeks]+= sum(map(lambda x : x>0, vec)) 
+        idx=[x for x in classes if x in courses_020] 
+        df.loc[pos,idx]= 4 
+    #hybrid touchpoint    
+    if any(x in classes for x in courses_2085_W): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_W] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2085_W])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2085_W])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_2085_W])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_2085_W])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    if any(x in classes for x in courses_2085_MW):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_MW] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.50] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2085_MW])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 [0.75-1.00] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2085_MW])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 12 
+    if any(x in classes for x in courses_2085_WF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_WF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2085_WF])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2085_WF])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 12 
+    if any(x in classes for x in courses_2085_MWF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_MWF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.33<x<=0.67, vec)) #Group 2 (0.33-0.67] meets on Wednesday Week 1
+        idx=np.array([x for x in classes if x in courses_2085_MWF])[np.logical_and(np.array(vec)>0.33, np.array(vec)<=0.67)].tolist()
+        df.loc[pos,idx]= 11
+    if any(x in classes for x in courses_2085_MTWR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_MTWR] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Wednesday Week 1
+        idx=np.array([x for x in classes if x in courses_2085_MTWR])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 11 
+    if any(x in classes for x in courses_2085_MWRF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_MWRF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Wednesday Week 1
+        idx=np.array([x for x in classes if x in courses_2085_MWRF])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 11 
+
+df.to_csv('AffiliationMatrix_v5_strategy2_W.csv',index=False)
+
+
+# Thursday database for Strategy 2
+first=1
+df = AffiliationMatrix_R
+for student in df['SYSGENID']:
+    pos = df.loc[df['SYSGENID'] == student,:].index[0]
+    classes = df.columns[(df.loc[df['SYSGENID'] == student].values==1)[0]].tolist()
+    #residential
+    if any(x in classes for x in courses_020):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_020] 
+        df.loc[pos,weeks]+= sum(map(lambda x : x>0, vec)) 
+        idx=[x for x in classes if x in courses_020] 
+        df.loc[pos,idx]= 4  
+    #hybrid touchpoint   
+    if any(x in classes for x in courses_2085_R): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_R] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2085_R])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2085_R])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_2085_R])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_2085_R])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    if any(x in classes for x in courses_2085_TR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_TR] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.50] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2085_TR])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 11
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 [0.75-1.00] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2085_TR])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 12 
+    if any(x in classes for x in courses_2085_MTWR):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_MTWR] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 [0.75-1.00] meets on Thursday Week 1
+        idx=np.array([x for x in classes if x in courses_2085_MTWR])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 11
+    if any(x in classes for x in courses_2085_MWRF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_MWRF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Thursday Week 1
+        idx=np.array([x for x in classes if x in courses_2085_MWRF])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 11
+df.to_csv('AffiliationMatrix_v5_strategy2_R.csv',index=False)
+    
+ 
+# Friday database for Strategy 2   
+first=1
+df = AffiliationMatrix_F
+for student in df['SYSGENID']:
+    pos = df.loc[df['SYSGENID'] == student,:].index[0]
+    classes = df.columns[(df.loc[df['SYSGENID'] == student].values==1)[0]].tolist()
+    #residential
+    if any(x in classes for x in courses_020):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_020] 
+        df.loc[pos,weeks]+= sum(map(lambda x : x>0, vec)) 
+        idx=[x for x in classes if x in courses_020] 
+        df.loc[pos,idx]= 4 
+    #hybrid touchpoint    
+    if any(x in classes for x in courses_2085_F): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_F] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2085_F])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2085_F])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_2085_F])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_2085_F])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+    if any(x in classes for x in courses_2085_MF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_MF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2085_MF])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 2 
+        idx=np.array([x for x in classes if x in courses_2085_MF])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 12
+    if any(x in classes for x in courses_2085_WF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_WF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2085_WF])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 2 
+        idx=np.array([x for x in classes if x in courses_2085_WF])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 12
+    if any(x in classes for x in courses_2085_MWF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_MWF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.67<x<=1, vec)) #Group 3 (0.67-1.00] meets on Friday Week 1
+        idx=np.array([x for x in classes if x in courses_2085_MWF])[np.logical_and(np.array(vec)>0.67, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 11 
+    if any(x in classes for x in courses_2085_MWRF):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_MWRF] 
+        df['Week1'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Friday Week 1 
+        idx=np.array([x for x in classes if x in courses_2085_MWRF])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 11
+       
+df.to_csv('AffiliationMatrix_v5_strategy2_F.csv',index=False)
+
+
+
+# Saturday database for Strategy 2   
+first=1
+df = AffiliationMatrix_S
+for student in df['SYSGENID']:
+    pos = df.loc[df['SYSGENID'] == student,:].index[0]
+    classes = df.columns[(df.loc[df['SYSGENID'] == student].values==1)[0]].tolist()
+    #residential
+    if any(x in classes for x in courses_020):
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_020] 
+        df.loc[pos,weeks]+= sum(map(lambda x : x>0, vec)) 
+        idx=[x for x in classes if x in courses_020] 
+        df.loc[pos,idx]= 4 
+    #hybrid touchpoint    
+    if any(x in classes for x in courses_2085_S): 
+        vec=[(np.count_nonzero(df[x].loc[first:pos])/np.count_nonzero(df.loc[:,x])) for x in classes if x in courses_2085_S] 
+        df['Week1'].loc[pos] += sum(map(lambda x : x<=0.25, vec)) #Group 1 [0.00-0.25] meets on Week 1
+        idx=np.array([x for x in classes if x in courses_2085_S])[np.array(vec)<=0.25].tolist()
+        df.loc[pos,idx]= 11 
+        df['Week2'].loc[pos] += sum(map(lambda x : 0.25<x<=0.5, vec)) #Group 2 (0.25-0.5] meets on Week 2
+        idx=np.array([x for x in classes if x in courses_2085_S])[np.logical_and(np.array(vec)>0.25, np.array(vec)<=0.5)].tolist()
+        df.loc[pos,idx]= 12 
+        df['Week3'].loc[pos] += sum(map(lambda x : 0.5<x<=0.75, vec)) #Group 3 (0.5-0.75] meets on Week 3
+        idx=np.array([x for x in classes if x in courses_2085_S])[np.logical_and(np.array(vec)>0.5, np.array(vec)<=0.75)].tolist()
+        df.loc[pos,idx]= 13 
+        df['Week4'].loc[pos] += sum(map(lambda x : 0.75<x<=1, vec)) #Group 4 (0.75-1] meets on Week 4
+        idx=np.array([x for x in classes if x in courses_2085_S])[np.logical_and(np.array(vec)>0.75, np.array(vec)<=1)].tolist()
+        df.loc[pos,idx]= 14 
+   
+       
+df.to_csv('AffiliationMatrix_v5_strategy2_S.csv',index=False)
+
+
