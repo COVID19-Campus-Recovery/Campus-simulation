@@ -1,0 +1,675 @@
+# PLEASE READ:
+# The code below will get the path to where the user has stored 'SimulationResults' folder
+# other names acceptable, just enter the path ending with the correct folder name SimulationResults_Transmission
+# the code will ask the user the path where SimulationResults is stored first
+
+# inside SimulationResults there MUST be at least two other folders, names Graphs and Raw-Output
+# All plots generated in .svg format will go to Graphs. They are high resolution images.
+# The .svg files are sized to fit a power point slide. On a .pptx file, click on insert image and search for the .svg inside Graphs.
+# The other folder Raw-Output will contain folders with dates, e.g. June 9, June 15, etc.
+
+# The code will ask the user for the the date/folder where to get data from
+# The user must enter the date exactly how it shows up, e.g. June 15, without quotes
+
+# Lastly, the code will check which scenario the user wants to plot.
+# If there's only one scenario (if you open the "date" folder, you can see the averages csv files), that scenario is plotted
+# If there are different scenarios and you need to open more folders (e.g. N=4, N=6, N=8), user can select 0, 1, 2, .... , (total_number_of_scenarios-1)
+# and all the plots will correspond to the chosen scenario.
+# Must run again with new selection in case the user wants to plot another scenario.
+# Make sure to first move the figures out of Graphs, otherwise they will get replaced
+
+
+import datetime
+import pandas as pd
+import plotly.offline as pyo
+import plotly.graph_objs as go
+from plotly.offline import init_notebook_mode, plot_mpl
+import os
+import glob
+import numpy as np
+import re
+from IPython.display import Image
+from plotly.subplots import make_subplots
+
+
+#update the paths where you have the folder 'Simulation Results'
+
+
+# Use input function to demand directory location from user 
+path = input("Please enter the path to the SimulationResults folder without quotes, e.g. /Users/Mariana/Documents/SimulationResults ")
+#/Users/Mariana/Documents/MADGIE/01. Databases & codes/SimulationResults_Transmission
+_plots = "/Graphs"
+_date = input("Please enter the date/label of folder storing the results without quotes, e.g. June 19 ")
+_data = "/Raw-Output/" + _date 
+path_plots = path + _plots
+path_data = path + _data
+
+
+#OR declare the paths/directories yourself
+#path ="/Users/Mariana/Documents/MADGIE/01. Databases & codes/SimulationResults_Transmission"
+#path_plots="/Users/Mariana/Documents/MADGIE/01. Databases & codes/SimulationResults_Transmission/Graphs"
+#path_data="/Users/Mariana/Documents/MADGIE/01. Databases & codes/SimulationResults_Transmission/Raw-Output/June 19"
+
+
+os.chdir(path_data) #change directory
+os.getcwd() #check directory
+
+
+# Fall 2020 official start, end dates
+ini_date= datetime.datetime(2020, 8, 17)
+end_date= datetime.datetime(2020, 12, 12)
+sim_ini_date = datetime.datetime(2020, 8, 16) #simulation starts on Sunday, Aug. 16th, day0
+
+
+##################################################################################
+########### Loading Databases for each of the scenarios in path_data #############
+
+##### OBS: need to manually unzip all the .zip files  first 
+##### building main database for each scenario with the average .csv files first
+##### individual runs will be added next
+
+
+### data for each scenario will be named in the format, e.g., 'N4_2019Fall'
+### 50+Online will have the '+' removed not to cause problems with function eval()
+
+# Obs: may take a couple of minutes to run =) 
+for subdir in os.listdir(path_data)[1:]:
+    #print(subdir)
+    newdir = os.path.join(path_data,subdir)+"/*.csv"
+    if (newdir.split("/",-1)[-2]).startswith("Individual"): 
+        number_of_scenarios_is_one=True
+        #this means there are no scenarios like N=4, etc. so there's only one folder to search
+        newdir = path_data+"/*.csv"
+        for files in glob.glob(newdir):
+            #print(files)
+            #e.g. files="/Users/Mariana/Documents/MADGIE/01. Databases & codes/SimulationResults_Transmission/Raw-Output/June 19/Average_50Online2.csv"
+            df= pd.read_csv(files, delimiter=",")
+            df = df.T #transpose data
+            df=pd.melt(df.reset_index(),id_vars='index',var_name=['Day of the Semester'],value_name='Value')
+            df=df[df['index'] != "Day of the Semester"]
+            df = df.rename(columns={'index': 'Indicator','Day of the Semester': 'Day' })
+            df.set_index('Indicator', inplace=True)
+            df['Date'] = sim_ini_date + df['Day'].map(datetime.timedelta)
+            df['Date'] =df['Date'].dt.strftime('%Y-%m-%d')
+            df = df.rename(columns={'Value': 'avg' })
+            dfname = (files.split("Raw-Output",2)[1]).split("/",2)[2][:-4]
+            dfname_short = "Sim_"+ dfname.split("Average_",1)[1]
+            dfname_short = dfname_short.replace("+", "") 
+            csvname = "IndividualRuns_" + dfname.split("_",2)[1]
+            ### adding the 50 individual runs
+            ### each column will be named with the run# 
+            ### the path name is "IndividualRuns_" + end of current .csv, e.g. 50+Online
+            indrunspath = os.path.join(path_data,csvname)+"/*.csv"
+            for fname in glob.glob(indrunspath):
+               #print (fname)
+               sim_run=pd.read_csv(fname)
+               sim_run = sim_run.T #transpose data
+               new_name = (fname[-7:].rsplit('/',1)[1]).rsplit('.',1)[0]
+               sim_run=pd.melt(sim_run.reset_index(),id_vars='index',var_name=['Day of the Semester'],value_name=new_name)
+               sim_run=sim_run[sim_run['index'] != "Day of the Semester"]
+               sim_run = sim_run.rename(columns={'index': 'Indicator','Day of the Semester': 'Day' })
+               sim_run.set_index('Indicator', inplace=True)
+               df = pd.concat([df, sim_run.iloc[:,-1]], axis=1)
+            # sorting the columns according to run 
+            df = df.reindex_axis(['Day', 'Date', 'avg']+sorted(df.columns[3:]), axis=1)
+            ### adding median, 10th percentile and 90th percentile to df
+            l=len(df.index)
+            perc10=np.zeros(l)
+            perc90=np.zeros(l)
+            median=np.zeros(l)
+            for i in range(0, l):
+                perc10[i]=df.iloc[i,3:].quantile(0.1)
+                perc90[i]=df.iloc[i,3:].quantile(0.9)
+                median[i]=df.iloc[i,3:].quantile(0.5)
+            df['perc10']=perc10
+            df['perc90']=perc90
+            df['median']=median
+            globals()[dfname_short] = df 
+    else:
+        # else means the code needs to enter each scenario (N=4, etc) folder and build databases called N4_Fall2019, etc.
+        number_of_scenarios_is_one=False
+        for files in glob.glob(newdir):
+            #print(files)
+            df= pd.read_csv(files, delimiter=",")
+            df = df.T #transpose data
+            df=pd.melt(df.reset_index(),id_vars='index',var_name=['Day of the Semester'],value_name='Value')
+            df=df[df['index'] != "Day of the Semester"]
+            df = df.rename(columns={'index': 'Indicator','Day of the Semester': 'Day' })
+            df.set_index('Indicator', inplace=True)
+            df['Date'] = sim_ini_date + df['Day'].map(datetime.timedelta)
+            df['Date'] =df['Date'].dt.strftime('%Y-%m-%d')
+            df = df.rename(columns={'Value': 'avg' })
+            dfname = (files.split("Raw-Output",2)[1]).split("/",2)[2][:-4]
+            dfname_short = dfname.split("=",1)[0]+ dfname.split("=",1)[1][0] + dfname.split("Average",1)[1]
+            dfname_short = dfname_short.replace("+", "") 
+            csvname = "IndividualRuns_" + dfname.split("_",2)[1]
+            ### adding the 50 individual runs
+            ### each column will be named with the run# 
+            ### the path name is "IndividualRuns_" + end of current .csv, e.g. 50+Online
+            indrunspath = os.path.join(path_data,subdir,csvname)+"/*.csv"
+            for fname in glob.glob(indrunspath):
+               # print (fname)
+               sim_run=pd.read_csv(fname)
+               sim_run = sim_run.T #transpose data
+               new_name = (fname[-7:].rsplit('/',1)[1]).rsplit('.',1)[0]
+               sim_run=pd.melt(sim_run.reset_index(),id_vars='index',var_name=['Day of the Semester'],value_name=new_name)
+               sim_run=sim_run[sim_run['index'] != "Day of the Semester"]
+               sim_run = sim_run.rename(columns={'index': 'Indicator','Day of the Semester': 'Day' })
+               sim_run.set_index('Indicator', inplace=True)
+               df = pd.concat([df, sim_run.iloc[:,-1]], axis=1)
+            # sorting the columns according to run 
+            df = df.reindex_axis(['Day', 'Date', 'avg']+sorted(df.columns[3:]), axis=1)
+            ### adding median, 10th percentile and 90th percentile to df
+            l=len(df.index)
+            perc10=np.zeros(l)
+            perc90=np.zeros(l)
+            median=np.zeros(l)
+            for i in range(0, l):
+                perc10[i]=df.iloc[i,3:].quantile(0.1)
+                perc90[i]=df.iloc[i,3:].quantile(0.9)
+                median[i]=df.iloc[i,3:].quantile(0.5)
+            df['perc10']=perc10
+            df['perc90']=perc90
+            df['median']=median
+            globals()[dfname_short] = df 
+    
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+
+
+
+############################# Start of Plot codes here #########################
+#html color codes extracted here: https://htmlcolorcodes.com/
+# feel free to change :) 
+color_label_0 = '#338DFF' # set the marker color to blue
+color_label_1 = '#FFA833' # set the marker color to orange
+color_label_2 = '#F1EB1B' # set the marker color to yellow
+# #1AAF77 previous version green color
+
+
+#Sim_2019Fall.to_csv("Sim_2019Fall.csv")
+
+# changing the directory to the plots directory
+os.chdir(path_plots)
+retval = os.getcwd()
+print ("Plots will be plotted at %s" % retval)
+
+Indicator=list(df.index.unique())
+
+#### choose 'tic' below according to this list
+#['# Cumulative Cases(Exposed)',
+# '# Cumulative Symptomatically Infected',
+# '# New Exposed',
+# '# Susceptible',
+# '# Exposed',
+# '# Pre-Symptimatic',
+# '# Recovered',
+# '# Asymptomatically Infected',
+# '# Symptomatically Infected',
+# '# Hospitalization',
+# '# Dead']
+
+
+#### Plots will be generate according to main probabilities scenarios
+
+if number_of_scenarios_is_one==True:
+    probabilities_ls =[(x.split('_',1)[1]).split('.',1)[0] for x in os.listdir(path_data)[1:]][0:3]
+    label_plots = probabilities_ls
+    df0 = eval("Sim_"+probabilities_ls[0]) 
+    df1 = eval("Sim_"+probabilities_ls[1])
+    df2 = eval("Sim_"+probabilities_ls[2])
+else:
+    #scenario=input("Please enter the scenario you wish to plot: must choose one scenario from 0, 1, ..., (number of scenarios -1) ")
+    probabilities_ls =[x.split('=',1)[0] + x.split('=',1)[1][0] for x in os.listdir(path_data)[1:]]        
+    scenarios_ls = [((x.split('.csv',1)[0]).split('Average',1)[1]).replace("+", "") for x in os.listdir(os.path.join(path_data,subdir))[0:] if '.csv' in x]
+    dfname = probabilities_ls[2]
+    label_plots = scenarios_ls
+    df0 = eval(dfname + scenarios_ls[0]) 
+    df1 = eval(dfname + scenarios_ls[1]) 
+    df2 = eval(dfname + scenarios_ls[2]) 
+
+
+
+# main layout
+layout = go.Layout(
+        plot_bgcolor='rgba(0,0,0,0)',
+        title=dict(text = "  ",y= 0.9,x=0.5,xanchor= 'center',yanchor= 'top',font=dict(family="sans-serif",size=36)),
+        xaxis=dict(title='Day of Semester',tickfont=dict(family="sans-serif",size=30),titlefont=dict(family="sans-serif",size=30)),
+        yaxis=dict(title='Number of Students',tickfont=dict(family="sans-serif",size=30),titlefont=dict(family="sans-serif",size=30)),
+        legend=dict(x=0.8,y=0.1,traceorder="normal",font=dict(family="sans-serif",size=30,color="black"),bgcolor="White",bordercolor="Black", borderwidth=1,
+        ),
+        )
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+# Figure 1 - 'Cumulative cases on campus (Symptomatic and Asymptomatic)'
+# with 10th percentile and 90th percentiles 
+# by Categories
+#xaxis = 'Day of Semester'
+#yaxis = 'Number of Students'
+
+
+tic = ['# Cumulative Cases(Exposed)']  #pick from Indicator list
+trace0 = go.Scatter(
+    x = df0.loc[tic]['Date'],
+    y = df0.loc[tic]['median'],
+    mode = 'markers+lines',
+    fill=None,
+    name = label_plots[0],
+    marker=dict(color=color_label_0) 
+)
+trace0_10perc = go.Scatter(
+    x = df0.loc[tic]['Date'],
+    y = df0.loc[tic]['perc10'],
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_0),
+    fill=None,
+    showlegend=False,
+    marker=dict(color=color_label_0) # set the marker color to blue
+)
+trace0_90perc = go.Scatter(
+    x = df0.loc[tic]['Date'],
+    y = df0.loc[tic]['perc90'],
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_0),
+    fill='tonexty',
+    showlegend=False,
+    marker=dict(color=color_label_0) # set the marker color to blue
+)
+trace1 = go.Scatter(
+    x = df1.loc[tic]['Date'],
+    y = df1.loc[tic]['median'], 
+    mode = 'markers+lines',
+    fill=None,
+    name = label_plots[1],
+    marker=dict(color=color_label_1) 
+)
+trace1_10perc = go.Scatter(
+    x = df1.loc[tic]['Date'],
+    y = df1.loc[tic]['perc10'], 
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_1),
+    fill=None,
+    showlegend=False,
+    marker=dict(color=color_label_1) 
+)
+trace1_90perc = go.Scatter(
+    x = df1.loc[tic]['Date'],
+    y = df1.loc[tic]['perc90'], 
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_1),
+    fill='tonexty',
+    showlegend=False,
+    marker=dict(color=color_label_1) 
+)
+trace2 = go.Scatter(
+    x = df2.loc[tic]['Date'],
+    y = df2.loc[tic]['median'],
+    mode = 'markers+lines',
+    fill=None,
+    name = label_plots[2],
+    marker=dict(color=color_label_2) 
+)
+trace2_10perc = go.Scatter(
+    x = df2.loc[tic]['Date'],
+    y = df2.loc[tic]['perc10'],
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_2),
+    fill=None,
+    showlegend=False,
+    marker=dict(color=color_label_2)
+)
+trace2_90perc = go.Scatter(
+    x = df2.loc[tic]['Date'],
+    y = df2.loc[tic]['perc90'],
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_2),
+    fill='tonexty',
+    showlegend=False,
+    marker=dict(color=color_label_2) 
+)
+
+    
+dt_fig = [trace0,trace0_10perc,trace0_90perc,trace1,trace1_10perc,trace1_90perc, trace2,trace2_10perc,trace2_90perc]
+    
+
+fig = go.Figure(data=dt_fig, layout=layout)
+fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+fig.update_layout(title=dict(text = 'Cumulative cases on campus (Symptomatic and Asymptomatic)',y= 0.9,x=0.5,xanchor= 'center',yanchor= 'top',font=dict(family="sans-serif",size=36)))
+fig.update_layout(legend=dict(x=0.8, y=0.1))
+#fig.show()
+pyo.plot(fig, filename='fig1.html') #open in browser
+fig.write_image("fig1.svg", width=1920, height=1080)
+
+#yaxes in log scale
+fig.update_yaxes(type="log")
+fig.write_image("fig1_log.svg", width=1920, height=1080)
+
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+# Figure 2 - 'Cumulative Number of Cases -  cumsum(# Pre-Symptimatic)'
+# with 10th percentile and 90th percentiles 
+# by Categories
+#xaxis = 'Day of Semester'
+#yaxis = 'Number of Students'
+
+
+tic = ['# Pre-Symptimatic'] 
+trace0 = go.Scatter(
+    x = df0.loc[tic]['Date'],
+    y = df0.loc[tic]['median'].cumsum(),
+    mode = 'markers+lines',
+    fill=None,
+    name = label_plots[0],
+    marker=dict(color=color_label_0) 
+)
+trace0_10perc = go.Scatter(
+    x = df0.loc[tic]['Date'],
+    y = df0.loc[tic]['perc10'].cumsum(),
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_0),
+    fill=None,
+    showlegend=False,
+    marker=dict(color=color_label_0) 
+)
+trace0_90perc = go.Scatter(
+    x = df0.loc[tic]['Date'],
+    y = df0.loc[tic]['perc90'].cumsum(),
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_0),
+    fill='tonexty',
+    showlegend=False,
+    marker=dict(color=color_label_0) 
+)
+trace1 = go.Scatter(
+    x = df1.loc[tic]['Date'],
+    y = df1.loc[tic]['median'].cumsum(), 
+    mode = 'markers+lines',
+    fill=None,
+    name = label_plots[1],
+    marker=dict(color=color_label_1)
+)
+trace1_10perc = go.Scatter(
+    x = df1.loc[tic]['Date'],
+    y = df1.loc[tic]['perc10'].cumsum(), 
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_1),
+    fill=None,
+    showlegend=False,
+    marker=dict(color=color_label_1) 
+)
+trace1_90perc = go.Scatter(
+    x = df1.loc[tic]['Date'],
+    y = df1.loc[tic]['perc90'].cumsum(), 
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_1),
+    fill='tonexty',
+    showlegend=False,
+    marker=dict(color=color_label_1) 
+)
+trace2 = go.Scatter(
+    x = df2.loc[tic]['Date'],
+    y = df2.loc[tic]['median'].cumsum(),
+    mode = 'markers+lines',
+    fill=None,
+    name = label_plots[2],
+    marker=dict(color=color_label_2) 
+)
+trace2_10perc = go.Scatter(
+    x = df2.loc[tic]['Date'],
+    y = df2.loc[tic]['perc10'].cumsum(),
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_2),
+    fill=None,
+    showlegend=False,
+    marker=dict(color=color_label_2) 
+)
+trace2_90perc = go.Scatter(
+    x = df2.loc[tic]['Date'],
+    y = df2.loc[tic]['perc90'].cumsum(),
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_2),
+    fill='tonexty',
+    showlegend=False,
+    marker=dict(color=color_label_2) 
+)
+    
+dt_fig = [trace0,trace0_10perc,trace0_90perc,trace1,trace1_10perc,trace1_90perc, trace2,trace2_10perc,trace2_90perc]
+      
+
+fig = go.Figure(data=dt_fig, layout=layout)
+fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+fig.update_layout(title=dict(text = 'Cumulative Number of Cases',y= 0.9,x=0.5,xanchor= 'center',yanchor= 'top',font=dict(family="sans-serif",size=36)))
+fig.update_layout(legend=dict(x=0.05, y=0.85))
+
+fig.write_image("fig2.svg", width=1920, height=1080)
+pyo.plot(fig, filename='fig2.html')
+
+fig.update_yaxes(type="log")
+fig.update_layout(legend=dict(x=0.55, y=0.1))
+
+fig.write_image("fig2_log.svg", width=1920, height=1080)
+
+
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+# Figure 3 - 'Number of Infectious Students on Campus – 
+# (# Pre-Symptimatic + # Asymptomatically Infected + # Symptomatically Infected')
+# with 10th percentile and 90th percentiles 
+# by Categories
+#xaxis = 'Day of Semester'
+#yaxis = 'Number of Students'
+
+
+tic1 = ['# Pre-Symptimatic']
+tic2= ['# Asymptomatically Infected']
+tic3= ['# Symptomatically Infected']
+       
+       
+trace0 = go.Scatter(
+    x = df0.loc[tic1]['Date'],
+    y = df0.loc[tic1]['median']+df0.loc[tic2]['median'].values+df0.loc[tic3]['median'].values,
+    mode = 'markers+lines',
+    fill=None,
+    name = label_plots[0],
+    marker=dict(color=color_label_0)
+)
+trace0_10perc = go.Scatter(
+    x = df0.loc[tic1]['Date'],
+    y = df0.loc[tic1]['perc10']+df0.loc[tic2]['perc10'].values+df0.loc[tic3]['perc10'].values,
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_0),
+    fill=None,
+    showlegend=False,
+    marker=dict(color=color_label_0) 
+)
+trace0_90perc = go.Scatter(
+    x = df0.loc[tic1]['Date'],
+    y = df0.loc[tic1]['perc90']+df0.loc[tic2]['perc90'].values+df0.loc[tic3]['perc90'].values,
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_0),
+    fill='tonexty',
+    showlegend=False,
+    marker=dict(color=color_label_0)
+)
+trace1 = go.Scatter(
+    x = df1.loc[tic1]['Date'],
+    y = df1.loc[tic1]['median']+df1.loc[tic2]['median'].values+df1.loc[tic3]['median'].values,
+    mode = 'markers+lines',
+    fill=None,
+    name = label_plots[1],
+    marker=dict(color=color_label_1) 
+)
+trace1_10perc = go.Scatter(
+    x = df1.loc[tic1]['Date'],
+    y = df1.loc[tic1]['perc10']+df1.loc[tic2]['perc10'].values+df1.loc[tic3]['perc10'].values,
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_1),
+    fill=None,
+    showlegend=False,
+    marker=dict(color=color_label_1) # set the marker color to orange
+)
+trace1_90perc = go.Scatter(
+    x = df1.loc[tic1]['Date'],
+    y = df1.loc[tic1]['perc90']+df1.loc[tic2]['perc90'].values+df1.loc[tic3]['perc90'].values,
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_1),
+    fill='tonexty',
+    showlegend=False,
+    marker=dict(color=color_label_1) # set the marker color to orange
+)
+trace2 = go.Scatter(
+    x = df2.loc[tic1]['Date'],
+    y = df2.loc[tic1]['median']+df2.loc[tic2]['median'].values+df2.loc[tic3]['median'].values,
+    mode = 'markers+lines',
+    fill=None,
+    name = label_plots[2],
+    marker=dict(color=color_label_2) 
+)
+trace2_10perc = go.Scatter(
+    x = df2.loc[tic1]['Date'],
+    y = df2.loc[tic1]['perc10']+df2.loc[tic2]['perc10'].values+df2.loc[tic3]['perc10'].values,
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_2),
+    fill=None,
+    showlegend=False,
+    marker=dict(color=color_label_2) 
+)
+trace2_90perc = go.Scatter(
+    x = df2.loc[tic1]['Date'],
+    y = df2.loc[tic1]['perc90']+df2.loc[tic2]['perc90'].values+df2.loc[tic3]['perc90'].values,
+    mode = 'lines',
+    line=dict(width=0.5, color=color_label_2),
+    fill='tonexty',
+    showlegend=False,
+    marker=dict(color=color_label_2) 
+)
+    
+dt_fig = [trace0,trace0_10perc,trace0_90perc,trace1,trace1_10perc,trace1_90perc, trace2,trace2_10perc,trace2_90perc]
+          
+
+fig = go.Figure(data=dt_fig, layout=layout)
+fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+fig.update_layout(title=dict(text = 'Number of Infectious Students on Campus',y= 0.9,x=0.5,xanchor= 'center',yanchor= 'top',font=dict(family="sans-serif",size=36)))
+fig.update_layout(legend=dict(x=0.1, y=0.85))
+
+fig.write_image("fig3.svg", width=1920, height=1080)
+pyo.plot(fig, filename='fig3.html')
+
+fig.update_yaxes(type="log")
+fig.update_layout(legend=dict(x=0.55, y=0.1))
+
+fig.write_image("fig3_log.svg", width=1920, height=1080)
+
+
+###############################################################################
+###############################################################################
+###############################################################################
+###############################################################################
+# Figure 4 - 'Number of Hospitalizations and Deaths' (double axis)
+# with 10th percentile and 90th percentiles 
+# by Categories
+#xaxis = 'Day of Semester'
+#yaxis = 'Number of Students'
+
+
+hosp = [ '# Hospitalization']
+dead=['# Dead']
+
+fig = make_subplots(specs=[[{"secondary_y": True}]],shared_xaxes=True)
+fig.add_trace(go.Scatter(
+    x = df0.loc[hosp]['Date'],
+    y = df0.loc[hosp]['median'],
+    mode = 'markers+lines',
+    name = '# Hospitalized - ' +label_plots[0],
+    marker=dict(color=color_label_0) 
+),
+    secondary_y=False,
+)
+fig.add_trace(go.Scatter(
+    x = df0.loc[dead]['Date'],
+    y = df0.loc[dead]['median'],
+    mode = 'lines',
+    line=dict(width=2, color=color_label_0),
+    name = '# Dead - ' +label_plots[0],
+),
+    secondary_y=True,
+)
+fig.add_trace(go.Scatter(
+    x = df1.loc[hosp]['Date'],
+    y = df1.loc[hosp]['median'], 
+    mode = 'markers+lines',
+    name = '# Hospitalized - ' +label_plots[1],
+    marker=dict(color=color_label_1) 
+),
+    secondary_y=False,
+)
+fig.add_trace(go.Scatter(
+    x = df1.loc[dead]['Date'],
+    y = df1.loc[dead]['median'], 
+    mode = 'lines',
+    line=dict(width=2, color=color_label_1),
+    name = '# Dead - '  +label_plots[1],
+),
+    secondary_y=True,
+) 
+fig.add_trace(go.Scatter(
+    x = df2.loc[hosp]['Date'],
+    y = df2.loc[hosp]['median'], 
+    mode = 'markers+lines',
+    name = '# Hospitalized - ' +label_plots[2],
+    marker=dict(color=color_label_2) 
+),
+    secondary_y=False,
+)
+fig.add_trace(go.Scatter(
+    x = df2.loc[dead]['Date'],
+    y = df2.loc[dead]['median'], 
+    mode = 'lines',
+    line=dict(width=2, color=color_label_2),
+    name = '# Dead - ' +label_plots[2],
+),
+    secondary_y=True,
+) 
+    
+       
+fig['layout'].update(plot_bgcolor='rgba(0,0,0,0)',
+    title=dict(text = 'Number of Hospitalizations and Deaths',y= 0.95,x=0.5,xanchor= 'center',yanchor= 'top',font=dict(family="sans-serif", size=36)),
+    xaxis=dict(title='Day of Semester',tickfont=dict(family="sans-serif",size=30),titlefont=dict(family="sans-serif",size=30)),
+    yaxis1=dict(title='Number of Hospitalizations',tickfont=dict(family="sans-serif",size=30),titlefont=dict(family="sans-serif",size=30)),
+    yaxis2=dict(title='Number of Deaths',tickfont=dict(family="sans-serif",size=30),titlefont=dict(family="sans-serif",size=30)),
+    legend=dict(x=0.05,y=0.95,traceorder="normal",font=dict(family="sans-serif",size=30,color="black"),bgcolor="White",bordercolor="Black",borderwidth=1))
+
+
+fig.update_xaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+fig.update_yaxes(showgrid=True, gridwidth=1, gridcolor='LightGray')
+
+fig.write_image("fig4.svg", width=1920, height=1080)
+pyo.plot(fig, filename='fig4.html')
+
+fig.update_yaxes(type="log")
+#fig.update_layout(legend=dict(x=0.55, y=0.1))
+
+fig.write_image("fig4_log.svg", width=1920, height=1080)
+
+
+
