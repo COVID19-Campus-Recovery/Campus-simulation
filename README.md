@@ -85,3 +85,29 @@ Modify based on version 5 to add interventions including wearing masks, testing 
 **7\. Version 7:**
 
 Modify based on version 6 to add interventions including wearing masks, testing (300 students per day), quarantine, and contact tracing.
+
+**8\. Version 8:**
+
+`8.1` Simulation code for hybrid strategies
+
+`8.2` Simulation code for no hybrid strategies
+
+`8.3` Calibration code
+
+**Infection models included:**
+
+Calculate new infections in each class based on transmission rate and total number of infected students in the class
+
+Calculate new infections outside of class based on transmission rate and total number of infected students in school
+
+Calculate new infections introduced from the external source based on a constant rate of external infection
+
+Calculate new infections through social activities on Thursday, Friday, and Saturday via Sampling 30 students contacted with each student during 3 hours
+
+Calculate new infections on Sunday via Sampling NW students contacted with each student each day
+
+**Interventions included:**
+
+Wearing masks;  Testing;  Contact tracing;  Quarantine
+
+
