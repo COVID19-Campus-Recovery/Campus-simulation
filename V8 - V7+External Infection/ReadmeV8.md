@@ -63,45 +63,45 @@ Including the defination and value of all parameters used in the model, need adj
 
 **3\. AllSchedule_V8.h:**
 
-`AffiliationMatrix.csv` / `AffiliationMatrixAll.csv` includes the assignment of all courses for all students, which is generated from the 2019 Fall registration data
+
 
 **4\. EverydaySchedule_V8.h:**
 
-`AffiliationMatrix.csv` / `AffiliationMatrixAll.csv` includes the assignment of all courses for all students, which is generated from the 2019 Fall registration data
+
 
 **5\. Write_V8.h:**
 
-`AffiliationMatrix.csv` / `AffiliationMatrixAll.csv` includes the assignment of all courses for all students, which is generated from the 2019 Fall registration data
+
 
 **6\. StateTransition_V8.h:**
 
-`AffiliationMatrix.csv` / `AffiliationMatrixAll.csv` includes the assignment of all courses for all students, which is generated from the 2019 Fall registration data
+
 
 **7\. TransmissionInfections_V8.h:**
 
-`AffiliationMatrix.csv` / `AffiliationMatrixAll.csv` includes the assignment of all courses for all students, which is generated from the 2019 Fall registration data
+
 
 **8\. SamplingInfectionsWeekends_V8.h:**
 
-`AffiliationMatrix.csv` / `AffiliationMatrixAll.csv` includes the assignment of all courses for all students, which is generated from the 2019 Fall registration data
+
 
 **9\. SampleInfectionsWeekdays_V8.h:**
 
-`AffiliationMatrix.csv` / `AffiliationMatrixAll.csv` includes the assignment of all courses for all students, which is generated from the 2019 Fall registration data
+
 
 **10\. Sample_V8.h:**
 
-`AffiliationMatrix.csv` / `AffiliationMatrixAll.csv` includes the assignment of all courses for all students, which is generated from the 2019 Fall registration data
+
 
 **11\. TestingProcess_V8.h:**
 
-`AffiliationMatrix.csv` / `AffiliationMatrixAll.csv` includes the assignment of all courses for all students, which is generated from the 2019 Fall registration data
+
 
 **12\. ContactsTracing_V8.h:**
 
-`AffiliationMatrix.csv` / `AffiliationMatrixAll.csv` includes the assignment of all courses for all students, which is generated from the 2019 Fall registration data
+
 
 **13\. Clear_V8.h:**
 
-`AffiliationMatrix.csv` / `AffiliationMatrixAll.csv` includes the assignment of all courses for all students, which is generated from the 2019 Fall registration data
+
 
