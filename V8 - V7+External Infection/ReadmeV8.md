@@ -22,7 +22,7 @@ AffiliationMatrix.csv & AffiliationMatrix_M/T/W/R/F/S.csv
 
 Input Files: 
 
-Seven affiliation matrixes for Fall 2019 strategy (all courses are residential)
+Seven affiliation matrixes for Fall 2019 strategy (all courses are residential) & Parameters.csv
 
 AffiliationMatrix.csv & AffiliationMatrix_M/T/W/R/F/S.csv
 
