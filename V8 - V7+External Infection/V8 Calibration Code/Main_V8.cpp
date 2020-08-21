@@ -1,16 +1,16 @@
 #include <iostream>
 #include<cmath>
-#include"Openclassfile.h"
-#include"write.h"
-#include"StateTransition.h"
-#include"SamplingInfections.h"
-#include"InclassInfections.h"
+#include"Openclassfile_CV8.h"
+#include"Write_CV8.h"
+#include"StateTransition_CV8.h"
+#include"SamplingInfectionsWeekends_CV8.h"
+#include"SampleInfectionsWeekdays_CV8.h"
+#include"TransmissionInfections_CV8.h"
+#include"ReadParameters_CV8.h"
 
 
 int main() {
 	
-	AlphaSet[0]=0.005;AlphaSet[1]=0.01;
-	LambdaSet[0]=0.015;
     filenameAM.push_back("AffiliationMatrix_M.csv");
     filenameAM.push_back("AffiliationMatrix_T.csv");
     filenameAM.push_back("AffiliationMatrix_W.csv");
@@ -19,45 +19,51 @@ int main() {
     filenameAM.push_back("AffiliationMatrix_S.csv");
     filenameAM.push_back("AffiliationMatrix.csv");
     for(int i=filenameAM.size()-1;i>=0;i--) {Openclassfile(filenameAM[i],i);} //Read AffiliationMatrix and save the data
-    for(int i=0;i<3;i++)
-	{
-		for(int j=0;j<2;j++)
-		{
-			ParameterMap[4*i+j].push_back(LambdaSet[i]);
-			ParameterMap[4*i+j].push_back(AlphaSet[j]);
-		}
-	}
+    ReadParameters();
 	RNaught.open(outputfilename2,std::ios::app);
-	RNaught<<"lambda_s"<<',';
-	RNaught<<"alpha"<<'\r';
+	RNaught<<Headers[0]<<',';
+	RNaught<<Headers[1]<<',';
+	RNaught<<Headers[2]<<'\r';
 	RNaught.close();
 	
 	RNaughtSummary.open(outputfilename3,std::ios::app);
-	RNaughtSummary<<"Lambda_s"<<',';
-	RNaughtSummary<<"Alpha"<<',';
+	RNaughtSummary<<Headers[0]<<',';
+	RNaughtSummary<<Headers[1]<<',';
+	RNaughtSummary<<Headers[2]<<',';
+	RNaughtSummary<<" "<<',';
 	RNaughtSummary<<"Ave(RNaught)"<<','; 
 	RNaughtSummary<<"Ave(DaysSimulated)"<<',';
 	RNaughtSummary<<"Total#Runs"<<'\r';
 	RNaughtSummary.close();
 	
-	for(int m=0;m<NumPar;m++)
+	for(int m=1;m<= NumParaSet;m++)
 	{
 		TotalRNaugut=0;
 		TotalDays=0;
 		CountRNaught=0;
-		lambda_s=ParameterMap[m][0];
-		alpha=ParameterMap[m][1];
+		lambda_s=ParametersMap[m][0];
+		alpha=ParametersMap[m][1];
 		lambda_a=beta*lambda_s;
 		lambda_p=beta*lambda_s;
-		cout<<"lambda_s:"<<' '; cout<<lambda_s<<endl;
-		cout<<"alpha:"<<' '; cout<<alpha<<endl;
+	    ExternalRate=ParametersMap[m][2];
+	
+	    cout<<"Parameters Set "<<m<<endl;
+		cout<<Headers[0]<<":"<<' ';  cout<<lambda_s<<endl;
+		cout<<Headers[1]<<":"<<' ';  cout<<alpha<<endl;
+		cout<<Headers[2]<<":"<<' ';  cout<<ExternalRate<<endl;
+		
 		RNaughtSummary.open(outputfilename3,std::ios::app);
 		RNaughtSummary<<lambda_s<<',';
 		RNaughtSummary<<alpha<<',';
+		RNaughtSummary<<ExternalRate<<',';
+		RNaughtSummary<<" "<<',';
 		RNaughtSummary.close();
+		
 		RNaught.open(outputfilename2,std::ios::app);
 		RNaught<<lambda_s<<',';
 		RNaught<<alpha<<',';
+		RNaught<<ExternalRate<<',';
+		RNaught<<" "<<',';
 		RNaught.close();
 		for(int k=0;k<RunTimes;k++)	
 		{
@@ -157,6 +163,20 @@ int main() {
 							    if( (bool) InclassInfections(stu,j,DayNum)) {NewExp+=1;CumuCase+=1;} 						    
 							}
 					    }
+						if((j==DaysoftheWeek-2) ||(j==DaysoftheWeek-3)||(j==DaysoftheWeek-4))
+						{
+							for (auto it = allStudent.begin(); it != allStudent.end(); it++) //Off Campus
+							{
+								if((it->second->condition==0) && (it->second->ifGreeklife==1) )
+								{
+									if(SamplingInfectionsWeekdays(it->second,StudentVector,DayNum))
+									{
+										NewExp+=1;
+										CumuCase+=1;
+									}
+								}
+							}
+						}
 						for (auto it = allStudent.begin(); it != allStudent.end(); it++)  //Outside of the class but on campus
 						{
 							if(it->second->condition==0)  
